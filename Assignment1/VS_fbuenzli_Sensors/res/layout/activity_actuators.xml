@@ -1,0 +1,39 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/RelativeLayout1"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="20dp" >
+
+    <SeekBar
+        android:id="@+id/actuators_seekbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentTop="true"
+        android:max="1000" />
+
+    <Button
+        android:id="@+id/actuators_button_vibrate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentRight="true"
+        android:layout_below="@+id/actuators_seekbar"
+        android:layout_marginTop="16dp"
+        android:onClick="onClickVibrate"
+        android:text="vibrate" />
+
+    <Button
+        android:id="@+id/actuators_button_playsound"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentRight="true"
+        android:layout_below="@+id/actuators_button_vibrate"
+        android:layout_marginTop="86dp"
+        android:onClick="onClickPlaySound"
+        android:text="@string/actuators_play_sound" />
+
+</RelativeLayout>
