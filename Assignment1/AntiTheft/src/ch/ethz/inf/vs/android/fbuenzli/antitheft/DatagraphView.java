@@ -41,7 +41,7 @@ public class DatagraphView extends View
 		pt.setStrokeWidth(1);
 		pt.setTextSize(10);
 		pl.setStrokeWidth(1);
-		pl.setAlpha(125);
+		pl.setAlpha(50);
 		
 	}
 	
@@ -57,25 +57,27 @@ public class DatagraphView extends View
 			float w = c.getWidth(), h = c.getHeight();
 			float m = h/2; // height of center line (y=0)
 			
-			float max = 6; // y-limit of 6g
+			float max = 2.5f; // y-limit of 6g
 			
 			// draw y-Axis (0g)
 			c.drawLine(0, m, w, m, pt);
 			c.drawText("0g", 2, m-8, pt);
 			
-			c.drawLine(0, m-m/max, w, m-m/max, pt); c.drawText( "1g", 2, m-m/max-8, pt);
-			c.drawLine(0, m+m/max, w, m+m/max, pt); c.drawText("-1g", 2, m+m/max-8, pt);
+			c.drawLine(0, m-m/max, w, m-m/max, pl); c.drawText( "1g", 2, m-m/max-8, pt);
+			c.drawLine(0, m+m/max, w, m+m/max, pl); c.drawText("-1g", 2, m+m/max-8, pt);
 			
 			
 			int i = 0;
 			for(Vector3 v: data)
 			{
-				c.drawPoint(i*2, m-v.x/max*m, px);
-				c.drawPoint(i*2, m-v.y/max*m, py);
-				c.drawPoint(i*2, m-v.z/max*m, pz);
+				c.drawPoint(i*2, m-v.x/max*m/10, px);
+				c.drawPoint(i*2, m-v.y/max*m/10, py);
+				c.drawPoint(i*2, m-v.z/max*m/10, pz);
 				
 				i++;
+				w = v.x;
 			}
+			c.drawText(Float.toString(w), 10, 10, pt);
 		}
 	}
 	
