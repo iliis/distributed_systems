@@ -1,0 +1,12 @@
+<resources>
+
+    <string name="app_name">AntiTheft</string>
+    <string name="menu_settings">Settings</string>
+    <string name="title_activity_main">AntiTheft</string>
+    <string name="main_title">AntiTheft</string>
+    <string name="main_subtitle">lock your phone</string>
+    <string name="main_button_off">click to lock phone</string>
+    <string name="main_button_on">locked</string>
+    <string name="main_config_disarmtime">disarming time: 10s</string>
+
+</resources>
