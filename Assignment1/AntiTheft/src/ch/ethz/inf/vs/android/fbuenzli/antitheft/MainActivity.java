@@ -53,7 +53,7 @@ public class MainActivity extends Activity
     public void onStop() {
     	super.onStop();
     	
-    	// TODO: there is someting wrong with this:
+    	// TODO: there might be someting wrong with this:
     	if(ATService != null)
     	{
     		unbindService(ATService_connection); // actually, android should do this automatically

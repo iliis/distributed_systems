@@ -13,9 +13,13 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.Vibrator;
 import android.util.Log;
+import android.widget.ToggleButton;
 
 public class AntiTheftService extends Service implements SensorEventListener {
 	
@@ -29,21 +33,25 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	
 	
 	// actual implementation
-	private int disarm_time = 20, significant_time = 5; // in seconds
-	//public List<Vector3> sensor_data = new ArrayList<Vector3>();
 	
-	public class Vector3 {
-		public float x,y,z;
-		
-		
-		public Vector3() {
-			x = 0; y = 0; z = 0;
-		}
-		
-		public Vector3(float X, float Y, float Z) {
-			x = X; y = Y; z = Z;
-		}
-	}
+	// in seconds:
+	private int disarm_time = 20,
+			significant_time = 5,
+			sampling_time = 5; // don't set this too high, otherwise the whole thing becomes numerically unstable!
+	
+	private long start_activity = 0; // time when first measured something above threshold
+	private boolean activity_detected = false; 
+	
+	
+	private double threshold = 100; // alarm when Mahalanobis distance is bigger than this value
+	
+	// used to calculate the resting behaviour of the sensor
+	private List<Vector3> samples = new ArrayList<Vector3>();
+	private long sampling_start_time; // timestamp
+	private boolean sampling_done = false;
+	private Vector3   mean;
+	private double[][] inv_cov; // inverse covariance
+
 	
 	
 	
@@ -95,29 +103,30 @@ public class AntiTheftService extends Service implements SensorEventListener {
     // lock the phone and report any suspicious measurements
     public void start() {
     	if(!running) {
-    		Notification n = new Notification(R.drawable.ic_launcher, "phone is now locked", System.currentTimeMillis());
-    	
-	    	// don't allow notification to be cleared directly by user
-	    	// deactivate for easier debugging (allowing manual cleanup of notification) 
-	    	n.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
-	    	
-	    	// open MainActivity when Notification is clicked
-	    	PendingIntent i = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
-	    	
-	    	n.setLatestEventInfo(this, "AntiTheft", "your device is currently locked and protected against movement", i);
-	    	
-	    	
-	    	
-	    	// register for sensor data
-	    	sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
-	    	
-	    	
-	    	    	
-	    	// display Notification
-	    	notifMgr.notify(NOTIFICATION_ID, n);
-	    	
-	    	running = true;
+    		
+        	// register for sensor data
+        	sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        	sampling_start_time = 0;
+    		
+    		running = true;
     	}
+    }
+    
+    private void displayNotification() {
+    	Notification n = new Notification(R.drawable.ic_launcher, "phone is now locked", System.currentTimeMillis());
+    	
+    	// don't allow notification to be cleared directly by user
+    	// deactivate for easier debugging (allowing manual cleanup of notification) 
+    	n.flags |= Notification.FLAG_NO_CLEAR | Notification.FLAG_ONGOING_EVENT;
+    	
+    	// open MainActivity when Notification is clicked
+    	PendingIntent i = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
+    	
+    	n.setLatestEventInfo(this, "AntiTheft", "your device is currently locked and protected against movement", i);
+    	
+    	    	
+    	// display Notification
+    	notifMgr.notify(NOTIFICATION_ID, n);
     }
     
     // unlock the phone
@@ -126,7 +135,21 @@ public class AntiTheftService extends Service implements SensorEventListener {
     		sensorMgr.unregisterListener(this);
     		notifMgr.cancel(NOTIFICATION_ID);
     		running = false;
+    		samples.clear();
+    		sampling_done = false;
+    		sampling_start_time = 0;
+    		
+    		// find a way to tell the activity to disable the togglebutton
     	}
+    }
+    
+    public void startAlarm() {
+    	this.stop(); // we don't need to watch it anymore, it has already happened
+    	
+		final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+		tg.startTone(ToneGenerator.TONE_PROP_BEEP);
+		
+		((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(500);
     }
 
 	@Override
@@ -138,11 +161,115 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	@Override
 	public void onSensorChanged(SensorEvent ev) {
 		
-		Log.d("foo", "got value: "+Float.toString(ev.values[0]));
+		Vector3 v = new Vector3(ev.values[0], ev.values[1], ev.values[2]);
+		double dist = -1; // mahalanobis distance of new value
+		
+		if(!sampling_done) {
+			
+			// measure start of sampling period
+			if(sampling_start_time == 0)
+				sampling_start_time = ev.timestamp;
+			
+			// is sampling period over?
+			if((ev.timestamp - sampling_start_time)/1000000000 >= sampling_time) {
+				
+				sampling_done = true;
+				
+				Log.d("foo", "sampling done");
+				
+				mean = MathHelpers.calculate_mean(samples);
+				
+				Log.d("foo", "got "+Integer.toString(samples.size())+" samples.");
+				Log.d("foo", "mean.x: "+Double.toString(mean.x));
+				Log.d("foo", "mean.y: "+Double.toString(mean.y));
+				Log.d("foo", "mean.z: "+Double.toString(mean.z));
+				
+				
+				// invert the covariance matrix
+				double[][] cov = MathHelpers.calculate_covariance(samples, mean);
+				inv_cov = MathHelpers.invert3(cov);
+				
+				
+				
+				
+				/*cov[0] = new double[] {1.1734660799470433E-6,	3.390010528442641E-6,	-7.736200008350378E-6};
+				cov[1] = new double[] {3.390010528442641E-6,	9.793356262560716E-6,	-2.2349005162236438E-5};
+				cov[2] = new double[] {-7.736200008350378E-6,	-2.2349005162236438E-5,	5.100172181534321E-5};
+				
+				/*cov[0] = new double[] {1,	 3,	 -8};
+				cov[1] = new double[] {3,	10,	-22};
+				cov[2] = new double[] {-8, -22,	 51};*/
+
+				
+				Log.d("foo", "--------------- covariance:");
+				Log.d("foo", MathHelpers.matrixToMatlabCode3(cov));
+				
+				
+				Log.d("foo", "--------------- inverted covariance:");
+				Log.d("foo", MathHelpers.matrixToString3(inv_cov));
+				
+				
+				
+				double[][][] qr = MathHelpers.QR3(cov);
+				Log.d("foo", "--------------- Q:");
+				Log.d("foo", MathHelpers.matrixToString3(qr[0]));
+				
+				Log.d("foo", "--------------- R:");
+				Log.d("foo", MathHelpers.matrixToString3(qr[1]));
+				
+				Log.d("foo", "--------------- Q*R:");
+				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.mult3(qr[0], qr[1])));
+				
+				Log.d("foo", "--------------- A-Q*R:");
+				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.minus3(cov, MathHelpers.mult3(qr[0], qr[1]))));
+				
+				
+				double[][][] svd = MathHelpers.SVD3(cov);
+				Log.d("foo", "--------------- U:");
+				Log.d("foo", MathHelpers.matrixToString3(svd[0]));
+				
+				Log.d("foo", "--------------- S:");
+				Log.d("foo", MathHelpers.matrixToString3(svd[1]));
+				
+				Log.d("foo", "--------------- V:");
+				Log.d("foo", MathHelpers.matrixToString3(svd[2]));
+				
+				Log.d("foo", "--------------- Pseudoinverse:");
+				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.pseudo_invert3(cov)));
+				
+				
+								
+				// alert the user that the sampling is done and the phone is now locked
+				displayNotification();
+				
+			} else
+			{
+				Log.d("foo","Sampled point.");
+				samples.add(v);
+			}
+		}
+		else {
+			
+			dist = MathHelpers.mahalanobis3(inv_cov, mean, v);
+			Log.d("foo","Got point. Distance = "+Double.toString(dist));
+			
+			/*if(dist > threshold)
+				startAlarm();*/
+			
+		}
+		
 		
 		if(graph != null)
-			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]));
+			// copy values for easier access and because ev.values cannot be passed by reference
+			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist);
 		else
 			Log.d("foo", "no graphview set");
+	}
+	
+	public boolean isSignificant(Vector3 v) {
+		
+		
+		
+		return true;
 	}
 }

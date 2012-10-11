@@ -3,8 +3,6 @@ package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 import java.util.ArrayList;
 import java.util.List;
 
-import ch.ethz.inf.vs.android.fbuenzli.antitheft.AntiTheftService.Vector3;
-
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -19,24 +17,38 @@ public class DatagraphView extends View
 	private Paint px = new Paint();
 	private Paint py = new Paint();
 	private Paint pz = new Paint();
+	// distance
+	private Paint pd = new Paint();
 	
 	private Paint pt = new Paint(); // text / thick line
 	private Paint pl = new Paint(); // thin line
 	
-	private List<Vector3> data = new ArrayList<Vector3>();
+	private List<DataContainer> data = new ArrayList<DataContainer>();
+	
+	private class DataContainer {
+		public Vector3 v;
+		public double  dist;
+		
+		DataContainer(Vector3 vect, double d) {
+			v    = vect;
+			dist = d;
+		}
+	}
 	
 	public DatagraphView(Context context, AttributeSet attrs) {
 		super(context, attrs);
 		
-		px.setColor(Color.RED);
-		py.setColor(Color.GREEN);
-		pz.setColor(Color.BLUE);
+		px.setColor(Color.rgb(0, 155, 200));
+		py.setColor(Color.rgb(0, 100, 255));
+		pz.setColor(Color.rgb(0,  55, 255));
+		pd.setColor(Color.RED);
 		pt.setColor(Color.BLACK);
 		pl.setColor(Color.BLACK);
 		
 		px.setStrokeWidth(2);
 		py.setStrokeWidth(2);
 		pz.setStrokeWidth(2);
+		pd.setStrokeWidth(3);
 		
 		pt.setStrokeWidth(1);
 		pt.setTextSize(10);
@@ -47,6 +59,13 @@ public class DatagraphView extends View
 	
 	@Override
 	public void onDraw(Canvas c) {
+		
+		// TODO: implement this nicely
+		
+		
+		while(c.getWidth() < data.size()*2)
+			data.remove(0);
+		
 		c.drawColor(Color.WHITE);
 		
 		
@@ -68,22 +87,24 @@ public class DatagraphView extends View
 			
 			
 			int i = 0;
-			for(Vector3 v: data)
+			for(DataContainer d: data)
 			{
-				c.drawPoint(i*2, m-v.x/max*m/10, px);
-				c.drawPoint(i*2, m-v.y/max*m/10, py);
-				c.drawPoint(i*2, m-v.z/max*m/10, pz);
+				c.drawPoint(i*2, (float) (m-d.v.x/max*m/10), px);
+				c.drawPoint(i*2, (float) (m-d.v.y/max*m/10), py);
+				c.drawPoint(i*2, (float) (m-d.v.z/max*m/10), pz);
+				
+				if(d.dist >= 0)
+					c.drawPoint(i*2, (float) (h-d.dist-1), pd);
 				
 				i++;
-				w = v.x;
 			}
-			c.drawText(Float.toString(w), 10, 10, pt);
 		}
 	}
 	
-	public void addValue(Vector3 v)
+	public void addValue(Vector3 v, double dist)
 	{
-		data.add(v);
+		data.add(new DataContainer(v, dist));
+		
 		this.invalidate(); // force a redraw, because we got new valuess
 	}
 }
