@@ -1,9 +1,10 @@
 package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 
-import java.io.FileDescriptor;
 import java.util.ArrayList;
 import java.util.List;
 
+import Jama.Matrix;
+import Jama.SingularValueDecomposition;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -19,7 +20,6 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.Vibrator;
 import android.util.Log;
-import android.widget.ToggleButton;
 
 public class AntiTheftService extends Service implements SensorEventListener {
 	
@@ -43,14 +43,14 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	private boolean activity_detected = false; 
 	
 	
-	private double threshold = 100; // alarm when Mahalanobis distance is bigger than this value
+	private double threshold = 500; // alarm when Mahalanobis distance is bigger than this value
 	
 	// used to calculate the resting behaviour of the sensor
 	private List<Vector3> samples = new ArrayList<Vector3>();
 	private long sampling_start_time; // timestamp
 	private boolean sampling_done = false;
-	private Vector3   mean;
-	private double[][] inv_cov; // inverse covariance
+	private Vector3 mean;
+	private Matrix inv_cov; // inverse covariance
 
 	
 	
@@ -173,6 +173,8 @@ public class AntiTheftService extends Service implements SensorEventListener {
 			// is sampling period over?
 			if((ev.timestamp - sampling_start_time)/1000000000 >= sampling_time) {
 				
+				MathHelpers.updateMacheps();
+				
 				sampling_done = true;
 				
 				Log.d("foo", "sampling done");
@@ -180,14 +182,14 @@ public class AntiTheftService extends Service implements SensorEventListener {
 				mean = MathHelpers.calculate_mean(samples);
 				
 				Log.d("foo", "got "+Integer.toString(samples.size())+" samples.");
-				Log.d("foo", "mean.x: "+Double.toString(mean.x));
+				/*Log.d("foo", "mean.x: "+Double.toString(mean.x));
 				Log.d("foo", "mean.y: "+Double.toString(mean.y));
-				Log.d("foo", "mean.z: "+Double.toString(mean.z));
+				Log.d("foo", "mean.z: "+Double.toString(mean.z));*/
 				
 				
 				// invert the covariance matrix
 				double[][] cov = MathHelpers.calculate_covariance(samples, mean);
-				inv_cov = MathHelpers.invert3(cov);
+				inv_cov =  MathHelpers.pinv(new Matrix(cov));
 				
 				
 				
@@ -201,7 +203,7 @@ public class AntiTheftService extends Service implements SensorEventListener {
 				cov[2] = new double[] {-8, -22,	 51};*/
 
 				
-				Log.d("foo", "--------------- covariance:");
+				/*Log.d("foo", "--------------- covariance:");
 				Log.d("foo", MathHelpers.matrixToMatlabCode3(cov));
 				
 				
@@ -237,6 +239,36 @@ public class AntiTheftService extends Service implements SensorEventListener {
 				Log.d("foo", "--------------- Pseudoinverse:");
 				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.pseudo_invert3(cov)));
 				
+				Log.d("foo", "--------------- real inverse:");
+				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.invert3(cov)));
+				
+				Log.d("foo", "--------------- real inverse * matrix:");
+				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.mult3(cov, MathHelpers.invert3(cov))));*/
+				
+				
+				Matrix A = new Matrix(cov);
+				SingularValueDecomposition A_svd = new SingularValueDecomposition(A);
+				
+				Log.d("foo", "--------------- Matrix (array):");
+				Log.d("foo", MathHelpers.matrixToMatlabCode3(cov));
+				
+				Log.d("foo", "--------------- Matrix:");
+				Log.d("foo", MathHelpers.matrixToMatlabCode(A));
+				
+				Log.d("foo", "--------------- Jama SVD: U:");
+				Log.d("foo", MathHelpers.matrixToString(A_svd.getU()));
+				
+				Log.d("foo", "--------------- Jama SVD: S:");
+				Log.d("foo", MathHelpers.matrixToString(A_svd.getS()));
+				
+				Log.d("foo", "--------------- Jama SVD: V:");
+				Log.d("foo", MathHelpers.matrixToString(A_svd.getV()));
+				
+				Log.d("foo", "--------------- Jama SVD: Pseudoinv:");
+				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pseudo_invert3(A)));
+				
+				Log.d("foo", "--------------- Jama SVD: inv:");
+				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pinv(A)));
 				
 								
 				// alert the user that the sampling is done and the phone is now locked
@@ -244,24 +276,24 @@ public class AntiTheftService extends Service implements SensorEventListener {
 				
 			} else
 			{
-				Log.d("foo","Sampled point.");
+				//Log.d("foo","Sampled point.");
 				samples.add(v);
 			}
 		}
 		else {
 			
-			dist = MathHelpers.mahalanobis3(inv_cov, mean, v);
+			dist = MathHelpers.mahalanobis3(inv_cov, mean.getColumnVector(), v.getColumnVector());
 			Log.d("foo","Got point. Distance = "+Double.toString(dist));
 			
-			/*if(dist > threshold)
-				startAlarm();*/
+			if(dist > threshold)
+				startAlarm();
 			
 		}
 		
 		
 		if(graph != null)
 			// copy values for easier access and because ev.values cannot be passed by reference
-			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist);
+			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist/threshold);
 		else
 			Log.d("foo", "no graphview set");
 	}

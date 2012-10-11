@@ -1,5 +1,7 @@
 package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 
+import Jama.Matrix;
+
 public class Vector3 {
 	public double x,y,z;
 	
@@ -67,5 +69,21 @@ public class Vector3 {
 	// project this vector on to e
 	public Vector3 proj(Vector3 e) {
 		return e.mult(e.scalarmult(this) / e.scalarmult(e));
+	}
+	
+	public Matrix getColumnVector() {
+		Matrix m = new Matrix(3, 1);
+		m.set(0,0, this.x);
+		m.set(1,0, this.y);
+		m.set(2,0, this.z);
+		return m;
+	}
+	
+	public Matrix getRowVector() {
+		Matrix m = new Matrix(1, 3);
+		m.set(0,0, this.x);
+		m.set(0,1, this.y);
+		m.set(0,2, this.z);
+		return m;
 	}
 }

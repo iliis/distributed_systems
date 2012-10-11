@@ -80,10 +80,13 @@ public class DatagraphView extends View
 			
 			// draw y-Axis (0g)
 			c.drawLine(0, m, w, m, pt);
-			c.drawText("0g", 2, m-8, pt);
+			c.drawText("0g", 2, m-2, pt);
 			
-			c.drawLine(0, m-m/max, w, m-m/max, pl); c.drawText( "1g", 2, m-m/max-8, pt);
-			c.drawLine(0, m+m/max, w, m+m/max, pl); c.drawText("-1g", 2, m+m/max-8, pt);
+			c.drawLine(0, m-m/max, w, m-m/max, pl); c.drawText( "1g", 2, m-m/max-2, pl);
+			c.drawLine(0, m+m/max, w, m+m/max, pl); c.drawText("-1g", 2, m+m/max-2, pl);
+			
+			// draw threshold
+			c.drawText("threshold", 25, m-2, pd);
 			
 			
 			int i = 0;
@@ -94,7 +97,15 @@ public class DatagraphView extends View
 				c.drawPoint(i*2, (float) (m-d.v.z/max*m/10), pz);
 				
 				if(d.dist >= 0)
-					c.drawPoint(i*2, (float) (h-d.dist-1), pd);
+				{
+					c.drawPoint(i*2, (float) (h-d.dist*m), pd);
+					
+					// display when thershold gets triggered (dist is normalized)
+					if(d.dist>1)
+						c.drawLine(i*2, 0, i*2, (float) (h-d.dist/m), pd);
+				}
+				
+				
 				
 				i++;
 			}
