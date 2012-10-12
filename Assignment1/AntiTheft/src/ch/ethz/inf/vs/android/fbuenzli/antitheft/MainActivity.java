@@ -1,10 +1,8 @@
 package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 
-import java.util.List;
-
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
-import android.support.v4.app.FragmentActivity;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.view.Menu;
@@ -36,12 +34,27 @@ public class MainActivity extends Activity
 			// not sure if it is intelligent in Java to have circular references
 			DatagraphView graph = (DatagraphView) findViewById(R.id.main_graph);
 			ATService.setGraph(graph);
+			ATService.setMainActivity(MainActivity.this);
 			graph.setATService(ATService);
+			
+			((SeekBar) findViewById(R.id.main_disarm_bar)).setProgress(ATService.getDisarmTime());
 		}
 
 		@Override
 		public void onServiceDisconnected(ComponentName arg0) {
 			ATService = null;
+		}
+	};
+	
+	AlertDialog disarm_dialog;
+	
+	private Handler  delayed_handler = new Handler();
+	private Runnable delayed_alarm   = new Runnable() {
+		public void run() {
+			if(ATService != null)
+				ATService.startAlarm();
+			
+			disarm_dialog.cancel();
 		}
 	};
 
@@ -78,17 +91,16 @@ public class MainActivity extends Activity
     	
     }
     
-    /*@Override
+    @Override
     public void onDestroy() {
     	super.onDestroy();
     	
-    	// TODO: there might be someting wrong with this:
     	if(ATService != null)
     	{
     		unbindService(ATService_connection); // actually, android should do this automatically
     		ATService = null;
     	}
-    }*/
+    }
 
 	@Override
 	public void onCheckedChanged(CompoundButton b, boolean checked) {
@@ -101,12 +113,15 @@ public class MainActivity extends Activity
 		}
 	}
 	
+	public void setToggleButtonState(boolean checked) {
+		((ToggleButton) findViewById(R.id.enable_alarm)).setChecked(checked);
+	}
 
     
     private void displayStartLearningDialog() {
     	AlertDialog.Builder b = new AlertDialog.Builder(this);
-    	b.setMessage("I will now measure the sensors for some time to learn how it feels just lying around. Please don't move me."+
-    	 "After around 5 seconds I will be ready and will alert you if anything happens to me!")
+    	b.setMessage("I will now measure the sensors for some time to learn how it feels just lying around. Please don't move me. "+
+    	 "After "+Integer.toString(ATService.getLearnigTime())+" seconds I will be ready and will alert you if anything happens to me!")
     	 .setCancelable(false).setPositiveButton("start", new DialogInterface.OnClickListener() {
 			
 			@Override
@@ -117,6 +132,35 @@ public class MainActivity extends Activity
     	
     	b.create().show();
     }
+    
+    
+    // we have a confirmed alarm, but the user still has time to disarm it
+    public void startCountdown() {
+    	
+    	if(ATService != null) {
+	    	// stop listening, the alarm already happened
+    		ATService.stop();
+	    	
+	    	// start delayed alarm
+	    	delayed_handler.postDelayed(delayed_alarm, ATService.getDisarmTime()*1000);
+	    	
+	    	// provide user with option to disarm it
+	    	AlertDialog.Builder b = new AlertDialog.Builder(this);
+	    	b.setTitle("ALERT");
+	    	b.setMessage("The phone was moved, but have still "+Integer.toString(ATService.getDisarmTime())+" seconds time to disarm it.")
+	    	 .setPositiveButton("disarm", new DialogInterface.OnClickListener() {
+				
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					delayed_handler.removeCallbacks(delayed_alarm);
+				}
+			});
+	    	
+	    	disarm_dialog = b.create();
+	    	disarm_dialog.show();
+    	}
+    }
+    
 
 	@Override
 	public void onProgressChanged(SeekBar b, int value, boolean u) {

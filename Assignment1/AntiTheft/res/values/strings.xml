@@ -20,11 +20,12 @@
     <string name="pref_threshold_summ">Sensorvalues over this limit will activate the alarm.</string>
     <string name="pref_signifpercent">Significant Percentage</string>
     <string name="pref_signifpercent_summ">How many values have to be over the threshold.</string>
-    <string name="pref_signifpercent_dialogtext">Percent (0-100)</string>
+    <string name="pref_signifpercent_dialogtext">Percent (0 to 100)</string>
     <string name="pref_sensorspeed">Sensor Speed</string>
     <string name="pref_sensorspeed_summ">How fast should I read out my sensors.</string>
     <string name="pref_sigtime">Significant Time Window</string>
     <string name="pref_sigtime_summ">Alert if activity during this window is high enough.</string>
     <string name="pref_sigtime_dialogtitle">Time Window (in seconds)</string>
+    <string name="pref_alarm_enabled">Alarm Enabled</string>
 
 </resources>

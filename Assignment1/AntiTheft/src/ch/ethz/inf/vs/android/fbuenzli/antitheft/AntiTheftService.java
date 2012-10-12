@@ -1,6 +1,7 @@
 package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import Jama.Matrix;
@@ -10,6 +11,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
@@ -20,6 +22,7 @@ import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Vibrator;
 import android.preference.PreferenceManager;
@@ -33,10 +36,12 @@ public class AntiTheftService extends Service
 	SharedPreferences	prefMgr;
 	SensorManager		sensorMgr;
 	DatagraphView		graph;
+	MainActivity		mainActivity;
 	private boolean running = false;
 	
 	private static final int NOTIFICATION_ID = 1;
 	
+	private static final double NS_TO_SECONDS = 1000000000;
 	
 	// actual implementation
 	
@@ -44,7 +49,9 @@ public class AntiTheftService extends Service
 	private int disarm_time = 20,
 			significant_time = 5,
 			sampling_time = 5; // don't set this too high, otherwise the whole thing becomes numerically unstable!
-	private double significant_percent = 0.1; // amount of samples inside sampling_time interval which must be above threshold 
+	private double significant_percent = 0.1; // amount of samples inside sampling_time interval which must be above threshold
+	
+	public double dist = -1; // last measured distance -> for access in DatagraphView
 	
 	//private long start_activity = 0; // time when first measured something above threshold
 	//private boolean activity_detected = false; 
@@ -60,12 +67,24 @@ public class AntiTheftService extends Service
 	private Matrix inv_cov; // inverse covariance
 
 	private int sensor_speed = SensorManager.SENSOR_DELAY_NORMAL;
+	private boolean alarm_enabled = true; // you can disable firing the alarm
+	private boolean alarm_immediately = false; // override the Significant Time Window
+	
+	private List<Event> events = new LinkedList<Event>();
+	
+	private class Event {
+		public boolean value;
+		public double timestamp; // in seconds
+		
+		Event(boolean v, double ts) {
+			value = v;
+			timestamp = ts;
+		}
+	}
 	
 	
-    public AntiTheftService() {
-    }
-    
-    @Override
+	
+	@Override
     public void onCreate() {
     	super.onCreate();
     	
@@ -86,6 +105,9 @@ public class AntiTheftService extends Service
     	
     	significant_percent = Double.parseDouble(prefMgr.getString("pref_sig_percent", Double.toString(significant_percent*100)))/100;
     	threshold           = Double.parseDouble(prefMgr.getString("pref_threshold",   Double.toString(threshold)));
+    	
+    	alarm_enabled       = prefMgr.getBoolean("pref_alarm_enabled", true);
+    	alarm_immediately   = prefMgr.getBoolean("pref_activate_immediately", false);
     	
     	// check inputs
     	
@@ -157,15 +179,27 @@ public class AntiTheftService extends Service
     	graph = v;
     }
     
+    public void setMainActivity(MainActivity ma) {
+    	mainActivity = ma;
+    }
+    
     public boolean isLearning() {
     	return !sampling_done && running;
     }
     
     public float getLearningPercent() {
     	if(isLearning())
-    		return ((float)(System.nanoTime() - sampling_start_time)/1000000000) / sampling_time;
+    		return (float) (((System.nanoTime() - sampling_start_time)/NS_TO_SECONDS) / sampling_time);
     	else
     		return 0;
+    }
+    
+    public int getLearnigTime() {
+    	return sampling_time;
+    }
+    
+    public int getDisarmTime() {
+    	return disarm_time;
     }
     
     // lock the phone and report any suspicious measurements
@@ -212,7 +246,8 @@ public class AntiTheftService extends Service
     		
     		Log.d("foo", "AntiTheftService STOPPED");
     		
-    		// find a way to tell the activity to disable the togglebutton
+    		if(mainActivity != null)
+    			mainActivity.setToggleButtonState(false);
     	}
     }
     
@@ -234,8 +269,12 @@ public class AntiTheftService extends Service
 	public void onSensorChanged(SensorEvent ev) {
 		
 		Vector3 v = new Vector3(ev.values[0], ev.values[1], ev.values[2]);
-		double dist = -1; // mahalanobis distance of new value
+		dist = -1; // mahalanobis distance of new value
 		
+		// SAMPLING LOGIC
+		// measure the base distribution of an undisturbed phone
+		///////////////////////////////////////////////////////////////////////
+				
 		if(!sampling_done) {
 			
 			// measure start of sampling period
@@ -243,7 +282,7 @@ public class AntiTheftService extends Service
 				sampling_start_time = ev.timestamp;
 			
 			// is sampling period over?
-			if((ev.timestamp - sampling_start_time)/1000000000 >= sampling_time) {
+			if((ev.timestamp - sampling_start_time)/NS_TO_SECONDS >= sampling_time) {
 				
 				MathHelpers.updateMacheps();
 				
@@ -260,65 +299,12 @@ public class AntiTheftService extends Service
 				
 				
 				// invert the covariance matrix
-				double[][] cov = MathHelpers.calculate_covariance(samples, mean);
-				inv_cov =  MathHelpers.pinv(new Matrix(cov));
+				//double[][] cov = MathHelpers.calculate_covariance(samples, mean);
+				inv_cov =  MathHelpers.pinv(new Matrix(MathHelpers.calculate_covariance(samples, mean)));
 				
 				
 				
-				
-				/*cov[0] = new double[] {1.1734660799470433E-6,	3.390010528442641E-6,	-7.736200008350378E-6};
-				cov[1] = new double[] {3.390010528442641E-6,	9.793356262560716E-6,	-2.2349005162236438E-5};
-				cov[2] = new double[] {-7.736200008350378E-6,	-2.2349005162236438E-5,	5.100172181534321E-5};
-				
-				/*cov[0] = new double[] {1,	 3,	 -8};
-				cov[1] = new double[] {3,	10,	-22};
-				cov[2] = new double[] {-8, -22,	 51};*/
-
-				
-				/*Log.d("foo", "--------------- covariance:");
-				Log.d("foo", MathHelpers.matrixToMatlabCode3(cov));
-				
-				
-				Log.d("foo", "--------------- inverted covariance:");
-				Log.d("foo", MathHelpers.matrixToString3(inv_cov));
-				
-				
-				
-				double[][][] qr = MathHelpers.QR3(cov);
-				Log.d("foo", "--------------- Q:");
-				Log.d("foo", MathHelpers.matrixToString3(qr[0]));
-				
-				Log.d("foo", "--------------- R:");
-				Log.d("foo", MathHelpers.matrixToString3(qr[1]));
-				
-				Log.d("foo", "--------------- Q*R:");
-				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.mult3(qr[0], qr[1])));
-				
-				Log.d("foo", "--------------- A-Q*R:");
-				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.minus3(cov, MathHelpers.mult3(qr[0], qr[1]))));
-				
-				
-				double[][][] svd = MathHelpers.SVD3(cov);
-				Log.d("foo", "--------------- U:");
-				Log.d("foo", MathHelpers.matrixToString3(svd[0]));
-				
-				Log.d("foo", "--------------- S:");
-				Log.d("foo", MathHelpers.matrixToString3(svd[1]));
-				
-				Log.d("foo", "--------------- V:");
-				Log.d("foo", MathHelpers.matrixToString3(svd[2]));
-				
-				Log.d("foo", "--------------- Pseudoinverse:");
-				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.pseudo_invert3(cov)));
-				
-				Log.d("foo", "--------------- real inverse:");
-				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.invert3(cov)));
-				
-				Log.d("foo", "--------------- real inverse * matrix:");
-				Log.d("foo", MathHelpers.matrixToString3(MathHelpers.mult3(cov, MathHelpers.invert3(cov))));*/
-				
-				
-				Matrix A = new Matrix(cov);
+				/*Matrix A = new Matrix(cov);
 				SingularValueDecomposition A_svd = new SingularValueDecomposition(A);
 				
 				Log.d("foo", "--------------- Matrix (array):");
@@ -340,7 +326,7 @@ public class AntiTheftService extends Service
 				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pseudo_invert3(A)));
 				
 				Log.d("foo", "--------------- Jama SVD: inv:");
-				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pinv(A)));
+				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pinv(A)));*/
 				
 								
 				// alert the user that the sampling is done and the phone is now locked
@@ -356,10 +342,6 @@ public class AntiTheftService extends Service
 			
 			dist = MathHelpers.mahalanobis3(inv_cov, mean.getColumnVector(), v.getColumnVector());
 			Log.d("foo","Got point. Distance = "+Double.toString(dist));
-			
-			if(dist > threshold)
-				startAlarm();
-			
 		}
 		
 		
@@ -367,6 +349,49 @@ public class AntiTheftService extends Service
 			// copy values for easier access and because ev.values cannot be passed by reference
 			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist/threshold);
 		else
-			Log.d("foo", "no graphview set");
+			Log.w("foo", "no graphview set");
+		
+		
+		if(sampling_done) {
+				
+			// ALARM LOGIC
+			// did we get a significant event?
+			///////////////////////////////////////////////////////////////////////
+			
+			if(dist > 0 && dist > threshold) {
+				events.add(new Event(true, ev.timestamp/NS_TO_SECONDS));
+				
+				// immediate alarm fires as soon as an event is over the threshold
+				if(alarm_enabled && alarm_immediately)
+					startAlarm();
+			}
+			else
+				events.add(new Event(false, ev.timestamp/NS_TO_SECONDS));
+			
+			// clean up events which are older
+			while(!events.isEmpty() && events.get(0).timestamp < ev.timestamp/NS_TO_SECONDS-significant_time)
+				events.remove(0);
+			
+			
+			// check if our significant time window reaches the needed percentage of events
+			if(alarm_enabled && !alarm_immediately) {
+				
+				float count_t = 0, count_f = 0;
+				for(Event e: events) {
+					if(e.value)
+						count_t ++;
+					else
+						count_f ++;
+				}
+				
+				Log.d("foo", "percentage: "+Float.toString(count_t/(count_t+count_f))+" > "+Double.toString(significant_percent));
+				Log.d("foo", "count: "+Float.toString(count_t+count_f));
+				if(count_t/(count_t+count_f) >= significant_percent && mainActivity != null)
+					mainActivity.startCountdown(); // do not immediately alarm the user, instead give him time to disarm it first
+			}
+		} else
+			events.add(new Event(false, ev.timestamp/NS_TO_SECONDS)); // 'zero padding', so that we can calculate a somewhat reasonable percentage
+														// (otherwise, we would get a very high percentage shortly after finishing sampling,
+														//  because we have almost no events in our window)
 	}
 }

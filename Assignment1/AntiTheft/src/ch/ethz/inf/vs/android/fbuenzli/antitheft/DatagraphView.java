@@ -117,7 +117,6 @@ public class DatagraphView extends View
 			// draw threshold
 			c.drawText("threshold", 25, m-2, pd);
 			
-			double lastdist = -1;
 			int i = 0;
 			for(DataContainer d: data)
 			{
@@ -132,16 +131,14 @@ public class DatagraphView extends View
 					// display when thershold gets triggered (dist is normalized)
 					if(d.dist>1)
 						c.drawLine(i*2, 0, i*2, (float) (h-d.dist/m), pd);
-					
-					lastdist = d.dist;
 				}
 				
 				i++;
 			}
 			
-			
-			if(lastdist >= 0 && prefMgr.getBoolean("pref_show_dist", false))
-				c.drawText("Dist: "+Double.toString(lastdist), 5, 15, pt);
+			double d = at_service.dist;
+			if(d >= 0 && prefMgr.getBoolean("pref_show_dist", false))
+				c.drawText("Dist: "+Double.toString(d), 5, 15, pt);
 			
 		}
 		
