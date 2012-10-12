@@ -15,4 +15,5 @@
 	<ListPreference android:entries="@array/pref_sensorspeed_keys" android:summary="@string/pref_sensorspeed_summ" android:title="@string/pref_sensorspeed" android:key="pref_sensorspeed" android:entryValues="@array/pref_sensorspeed_values" android:dialogTitle="@string/pref_sensorspeed" android:defaultValue="1"/>
 	<EditTextPreference android:key="pref_sig_time" android:title="@string/pref_sigtime" android:defaultValue="5" android:summary="@string/pref_sigtime_summ" android:dialogTitle="@string/pref_sigtime_dialogtitle"/>
 	<CheckBoxPreference android:key="pref_alarm_enabled" android:title="@string/pref_alarm_enabled" android:defaultValue="true"/>
+	<CheckBoxPreference android:key="pref_play_loud_alarm" android:summary="@string/pref_playloud_summ" android:title="@string/pref_playloud" android:defaultValue="true"/>
 </PreferenceScreen>

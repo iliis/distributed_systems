@@ -1,5 +1,6 @@
 package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -20,7 +21,10 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.RingtoneManager;
 import android.media.ToneGenerator;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -230,8 +234,9 @@ public class AntiTheftService extends Service
     	
     	    	
     	// display Notification
-    	//notifMgr.notify(NOTIFICATION_ID, n);
-    	startForeground(NOTIFICATION_ID, n);
+    	notifMgr.notify(NOTIFICATION_ID, n);
+    	//startForeground(NOTIFICATION_ID, n);
+    	
     }
     
     // unlock the phone
@@ -254,10 +259,48 @@ public class AntiTheftService extends Service
     public void startAlarm() {
     	this.stop(); // we don't need to watch it anymore, it has already happened
     	
-		final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+    	
+		final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 1000);
 		tg.startTone(ToneGenerator.TONE_PROP_BEEP);
 		
 		((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(500);
+		
+		
+		// try to play an alarm sound no matter what (this should circumvent headphones and other tricks)
+		if(prefMgr.getBoolean("pref_play_loud_alarm", false)) {
+			Uri a = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+			if(a == null)
+				a = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALL);
+			
+			if(a == null)
+				Log.e("foo", "no alarm sound found!");
+			
+			AudioManager audioMgr = (AudioManager) getSystemService(AUDIO_SERVICE);
+			audioMgr.setStreamVolume(AudioManager.STREAM_ALARM, audioMgr.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0);
+			audioMgr.setStreamMute(AudioManager.STREAM_ALARM, false);
+			audioMgr.setSpeakerphoneOn(true);
+			
+			MediaPlayer m = new MediaPlayer();
+			try {
+				m.setDataSource(this, a);
+				m.setAudioStreamType(AudioManager.STREAM_ALARM);
+				m.prepare();
+				m.start();
+				
+			} catch (IllegalArgumentException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (SecurityException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IllegalStateException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
     }
 
 	@Override

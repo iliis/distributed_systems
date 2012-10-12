@@ -27,5 +27,7 @@
     <string name="pref_sigtime_summ">Alert if activity during this window is high enough.</string>
     <string name="pref_sigtime_dialogtitle">Time Window (in seconds)</string>
     <string name="pref_alarm_enabled">Alarm Enabled</string>
+    <string name="pref_playloud">Obnoxious Alarm</string>
+    <string name="pref_playloud_summ">Play a stubborn alarm sound.</string>
 
 </resources>
