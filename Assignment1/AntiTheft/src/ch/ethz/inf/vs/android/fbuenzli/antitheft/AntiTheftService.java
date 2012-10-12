@@ -5,11 +5,14 @@ import java.util.List;
 
 import Jama.Matrix;
 import Jama.SingularValueDecomposition;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -19,12 +22,15 @@ import android.media.ToneGenerator;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.Vibrator;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
-public class AntiTheftService extends Service implements SensorEventListener {
+public class AntiTheftService extends Service
+							  implements SensorEventListener, OnSharedPreferenceChangeListener {
 	
 	// android specific stuff
 	NotificationManager notifMgr;
+	SharedPreferences	prefMgr;
 	SensorManager		sensorMgr;
 	DatagraphView		graph;
 	private boolean running = false;
@@ -38,9 +44,10 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	private int disarm_time = 20,
 			significant_time = 5,
 			sampling_time = 5; // don't set this too high, otherwise the whole thing becomes numerically unstable!
+	private double significant_percent = 0.1; // amount of samples inside sampling_time interval which must be above threshold 
 	
-	private long start_activity = 0; // time when first measured something above threshold
-	private boolean activity_detected = false; 
+	//private long start_activity = 0; // time when first measured something above threshold
+	//private boolean activity_detected = false; 
 	
 	
 	private double threshold = 500; // alarm when Mahalanobis distance is bigger than this value
@@ -52,7 +59,7 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	private Vector3 mean;
 	private Matrix inv_cov; // inverse covariance
 
-	
+	private int sensor_speed = SensorManager.SENSOR_DELAY_NORMAL;
 	
 	
     public AntiTheftService() {
@@ -64,7 +71,59 @@ public class AntiTheftService extends Service implements SensorEventListener {
     	
     	notifMgr  = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
     	sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
+    	prefMgr   = PreferenceManager.getDefaultSharedPreferences(this);
+    	prefMgr.registerOnSharedPreferenceChangeListener(this);
     	
+    	readSettings();
+    	
+    	Log.d("foo", "AntiTheftService CREATED");
+    }
+    
+    public void readSettings() {
+    	significant_time    = Integer.parseInt(prefMgr.getString("pref_sig_time",     Integer.toString(significant_time)));
+    	sampling_time       = Integer.parseInt(prefMgr.getString("pref_learing_time", Integer.toString(sampling_time)));
+    	sensor_speed        = Integer.parseInt(prefMgr.getString("pref_sensorspeed",  "1"));
+    	
+    	significant_percent = Double.parseDouble(prefMgr.getString("pref_sig_percent", Double.toString(significant_percent*100)))/100;
+    	threshold           = Double.parseDouble(prefMgr.getString("pref_threshold",   Double.toString(threshold)));
+    	
+    	// check inputs
+    	
+    	if(significant_time < 1) significant_time = 1;
+    	if(sampling_time < 1) sampling_time = 1;
+    	
+    	switch(sensor_speed) {
+    	case 0:
+    		sensor_speed = SensorManager.SENSOR_DELAY_NORMAL; break;
+    	case 1:
+    		sensor_speed = SensorManager.SENSOR_DELAY_UI; break;
+    	case 2:
+    		sensor_speed = SensorManager.SENSOR_DELAY_GAME; break;
+    	case 3:
+    		sensor_speed = SensorManager.SENSOR_DELAY_FASTEST; break;
+    	
+    	default:
+    		sensor_speed = SensorManager.SENSOR_DELAY_NORMAL; break;
+    	}
+    	
+    	if(running) {
+    		sensorMgr.unregisterListener(this);
+    		sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensor_speed);
+    	}
+    	
+    	if(significant_percent > 1) significant_percent = 1;
+    	if(significant_percent < 0) significant_percent = 0;
+    }
+    
+    @Override
+	public void onSharedPreferenceChanged(SharedPreferences arg0, String arg1) {
+		readSettings();
+	}
+    
+    @Override
+    public int onStartCommand(Intent i, int flags, int id) {
+    	
+		return START_STICKY; // let it run until it is explixitly killed
     	
     }
     
@@ -74,7 +133,7 @@ public class AntiTheftService extends Service implements SensorEventListener {
     	
     	stop(); // to make sure the service is stopped when the user quits the application
     	
-    	Log.d("foo", "service destroyed");
+    	Log.d("foo", "AntiTheftService KILLED");
     }
     
     
@@ -98,17 +157,28 @@ public class AntiTheftService extends Service implements SensorEventListener {
     	graph = v;
     }
     
+    public boolean isLearning() {
+    	return !sampling_done && running;
+    }
     
+    public float getLearningPercent() {
+    	if(isLearning())
+    		return ((float)(System.nanoTime() - sampling_start_time)/1000000000) / sampling_time;
+    	else
+    		return 0;
+    }
     
     // lock the phone and report any suspicious measurements
     public void start() {
     	if(!running) {
     		
         	// register for sensor data
-        	sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        	sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensor_speed);
         	sampling_start_time = 0;
     		
     		running = true;
+    		
+    		Log.d("foo", "AntiTheftService STARTED");
     	}
     }
     
@@ -126,7 +196,8 @@ public class AntiTheftService extends Service implements SensorEventListener {
     	
     	    	
     	// display Notification
-    	notifMgr.notify(NOTIFICATION_ID, n);
+    	//notifMgr.notify(NOTIFICATION_ID, n);
+    	startForeground(NOTIFICATION_ID, n);
     }
     
     // unlock the phone
@@ -138,6 +209,8 @@ public class AntiTheftService extends Service implements SensorEventListener {
     		samples.clear();
     		sampling_done = false;
     		sampling_start_time = 0;
+    		
+    		Log.d("foo", "AntiTheftService STOPPED");
     		
     		// find a way to tell the activity to disable the togglebutton
     	}
@@ -155,7 +228,6 @@ public class AntiTheftService extends Service implements SensorEventListener {
 	@Override
 	public void onAccuracyChanged(Sensor arg0, int arg1) {
 		// Auto-generated method stub
-		
 	}
 
 	@Override
@@ -296,12 +368,5 @@ public class AntiTheftService extends Service implements SensorEventListener {
 			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist/threshold);
 		else
 			Log.d("foo", "no graphview set");
-	}
-	
-	public boolean isSignificant(Vector3 v) {
-		
-		
-		
-		return true;
 	}
 }

@@ -1,12 +1,30 @@
 <resources>
 
     <string name="app_name">AntiTheft</string>
-    <string name="menu_settings">Settings</string>
+    <string name="menu_settings">advanced settings</string>
     <string name="title_activity_main">AntiTheft</string>
     <string name="main_title">AntiTheft</string>
-    <string name="main_subtitle">lock your phone</string>
+    <string name="main_subtitle">lock your phone or anthing else lying around</string>
     <string name="main_button_off">click to lock phone</string>
     <string name="main_button_on">locked</string>
     <string name="main_config_disarmtime">disarming time: 10s</string>
+    <string name="pref_learningtime_title">Learning Time (seconds)</string>
+    <string name="title_activity_settings">Advanced Settings</string>
+    <string name="pref_actimm">Alert Immediately</string>
+    <string name="pref_actimm_summ">Ignores disarming time and fires alarm as soon as one value is over the threshold.</string>
+    <string name="pref_learningtime">Learning Time</string>
+    <string name="pref_learningtime_summ">How long to collect data to learn the base state.</string>
+    <string name="pref_showdist">Show Sensor Value</string>
+    <string name="pref_showdist_summ">Display the Mahalanobis distance for threshold setting.</string>
+    <string name="pref_threshold">Threshold</string>
+    <string name="pref_threshold_summ">Sensorvalues over this limit will activate the alarm.</string>
+    <string name="pref_signifpercent">Significant Percentage</string>
+    <string name="pref_signifpercent_summ">How many values have to be over the threshold.</string>
+    <string name="pref_signifpercent_dialogtext">Percent (0-100)</string>
+    <string name="pref_sensorspeed">Sensor Speed</string>
+    <string name="pref_sensorspeed_summ">How fast should I read out my sensors.</string>
+    <string name="pref_sigtime">Significant Time Window</string>
+    <string name="pref_sigtime_summ">Alert if activity during this window is high enough.</string>
+    <string name="pref_sigtime_dialogtitle">Time Window (in seconds)</string>
 
 </resources>
