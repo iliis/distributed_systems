@@ -31,6 +31,7 @@ import android.os.IBinder;
 import android.os.Vibrator;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.widget.SeekBar;
 
 public class AntiTheftService extends Service
 							  implements SensorEventListener, OnSharedPreferenceChangeListener {
@@ -60,14 +61,16 @@ public class AntiTheftService extends Service
 	//private long start_activity = 0; // time when first measured something above threshold
 	//private boolean activity_detected = false; 
 	
+	private int sensor_value_count = 0; // how many values we monitor
+	private List<Integer> monitored_sensors = new ArrayList<Integer>(); 
 	
 	private double threshold = 500; // alarm when Mahalanobis distance is bigger than this value
 	
 	// used to calculate the resting behaviour of the sensor
-	private List<Vector3> samples = new ArrayList<Vector3>();
+	private List<Matrix> samples = new ArrayList<Matrix>(); // column vectors
 	private long sampling_start_time; // timestamp
 	private boolean sampling_done = false;
-	private Vector3 mean;
+	private Matrix mean;
 	private Matrix inv_cov; // inverse covariance
 
 	private int sensor_speed = SensorManager.SENSOR_DELAY_NORMAL;
@@ -86,6 +89,42 @@ public class AntiTheftService extends Service
 		}
 	}
 	
+	
+	// as we get the values for the sensors asynchronously, we wait until we got a point for every sensor
+	double [] data_point;
+	boolean[] data_collected;
+	
+	public static int numberOfValues(int sensor_type) {
+		switch(sensor_type) {
+		case Sensor.TYPE_ACCELEROMETER:
+		case Sensor.TYPE_MAGNETIC_FIELD:
+		case Sensor.TYPE_GYROSCOPE:
+			return 3;
+		case Sensor.TYPE_LIGHT:
+		case Sensor.TYPE_PRESSURE:
+		case Sensor.TYPE_TEMPERATURE:
+			return 1;
+		default:
+			return 0;
+		}
+	}
+	
+	public static int stringToSensorType(String sensor) {
+		if(sensor.equals("Accelerometer"))
+			return Sensor.TYPE_ACCELEROMETER;
+		else if(sensor.equals("Compass"))
+			return Sensor.TYPE_MAGNETIC_FIELD;
+		else if(sensor.equals("Barometer"))
+			return Sensor.TYPE_PRESSURE;
+		else if(sensor.equals("Light"))
+			return Sensor.TYPE_LIGHT;
+		else if(sensor.equals("Gyroscope"))
+			return Sensor.TYPE_GYROSCOPE;
+		else if(sensor.equals("Temperature"))
+			return Sensor.TYPE_TEMPERATURE;
+		else
+			return -1; // better throw exception
+	}
 	
 	
 	@Override
@@ -106,12 +145,27 @@ public class AntiTheftService extends Service
     	significant_time    = Integer.parseInt(prefMgr.getString("pref_sig_time",     Integer.toString(significant_time)));
     	sampling_time       = Integer.parseInt(prefMgr.getString("pref_learing_time", Integer.toString(sampling_time)));
     	sensor_speed        = Integer.parseInt(prefMgr.getString("pref_sensorspeed",  "1"));
+    	disarm_time			= Integer.parseInt(prefMgr.getString("pref_disarm_time", Integer.toString(disarm_time)));
     	
     	significant_percent = Double.parseDouble(prefMgr.getString("pref_sig_percent", Double.toString(significant_percent*100)))/100;
     	threshold           = Double.parseDouble(prefMgr.getString("pref_threshold",   Double.toString(threshold)));
     	
     	alarm_enabled       = prefMgr.getBoolean("pref_alarm_enabled", true);
     	alarm_immediately   = prefMgr.getBoolean("pref_activate_immediately", false);
+    	
+    	sensor_value_count = 0; monitored_sensors.clear();
+    	String s = prefMgr.getString("pref_active_sensors", "default");
+    	for(String sensor: s.split("OV=I=XseparatorX=I=VO", 0)) {
+    		int type = stringToSensorType(sensor);
+    		if(numberOfValues(type)>0) monitored_sensors.add(type); sensor_value_count += numberOfValues(type);
+    	}
+    	
+    	data_point     = new double [sensor_value_count];
+    	data_collected = new boolean[sensor_value_count];
+    	
+    	
+    	Log.d("foo", "Using "+Integer.toString(monitored_sensors.size())+
+    			" sensors with a total of "+Integer.toString(sensor_value_count)+" values.");
     	
     	// check inputs
     	
@@ -133,12 +187,19 @@ public class AntiTheftService extends Service
     	}
     	
     	if(running) {
-    		sensorMgr.unregisterListener(this);
-    		sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensor_speed);
+    		sensorMgr.unregisterListener(this); // deregister every sensor
+    		registerSensors();
     	}
     	
     	if(significant_percent > 1) significant_percent = 1;
     	if(significant_percent < 0) significant_percent = 0;
+    }
+    
+    private void registerSensors() {
+    	for(Integer s: monitored_sensors) {
+    		sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(s), sensor_speed);
+    		//Log.d("foo", "register listener for sensor type "+Integer.toString(s));
+    	}
     }
     
     @Override
@@ -211,7 +272,8 @@ public class AntiTheftService extends Service
     	if(!running) {
     		
         	// register for sensor data
-        	sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensor_speed);
+        	//sensorMgr.registerListener(this, sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensor_speed);
+    		registerSensors();
         	sampling_start_time = 0;
     		
     		running = true;
@@ -242,7 +304,8 @@ public class AntiTheftService extends Service
     // unlock the phone
     public void stop() {
     	if(running) {
-    		sensorMgr.unregisterListener(this);
+    		sensorMgr.unregisterListener(this); // deregister every sensor
+    		
     		notifMgr.cancel(NOTIFICATION_ID);
     		running = false;
     		samples.clear();
@@ -310,8 +373,41 @@ public class AntiTheftService extends Service
 
 	@Override
 	public void onSensorChanged(SensorEvent ev) {
+		// collect data from every sensor and combine them into one datapoint
 		
-		Vector3 v = new Vector3(ev.values[0], ev.values[1], ev.values[2]);
+		//Log.d("foo", "got sensor data for sensor "+ev.sensor.getName()+" of type "+Integer.toString(ev.sensor.getType()));
+		
+		int i=0;
+		for(int stype: monitored_sensors) {
+			if(stype == ev.sensor.getType())
+				for(int k=0; k<numberOfValues(stype); k++) {
+					data_point    [i+k] = ev.values[k];
+					data_collected[i+k] = true;
+				}
+			
+			i += numberOfValues(stype);
+		}
+		
+		// do we have data from every sensor?
+		boolean complete = true;
+		for(i=0;i<sensor_value_count;i++)
+			if(data_collected[i] == false)
+				{complete = false; break;}
+		
+		//for(i=0;i<sensor_value_count;i++)
+			//Log.d("foo", "value = "+Double.toString(data_point[i])+"  collected = "+Boolean.toString(data_collected[i]));
+		
+		if(complete) {
+			onNewDatapoint(new Matrix(data_point, sensor_value_count), ev.timestamp);
+			
+			for(i=0;i<sensor_value_count;i++)
+				data_collected[i] = false;
+		}
+	}
+	
+	private void onNewDatapoint(Matrix v, long timestamp) {
+		//Log.d("foo", "got datapoint: "+MathHelpers.matrixToString(v));
+		
 		dist = -1; // mahalanobis distance of new value
 		
 		// SAMPLING LOGIC
@@ -322,12 +418,10 @@ public class AntiTheftService extends Service
 			
 			// measure start of sampling period
 			if(sampling_start_time == 0)
-				sampling_start_time = ev.timestamp;
+				sampling_start_time = timestamp;
 			
 			// is sampling period over?
-			if((ev.timestamp - sampling_start_time)/NS_TO_SECONDS >= sampling_time) {
-				
-				MathHelpers.updateMacheps();
+			if((timestamp - sampling_start_time)/NS_TO_SECONDS >= sampling_time) {
 				
 				sampling_done = true;
 				
@@ -336,42 +430,18 @@ public class AntiTheftService extends Service
 				mean = MathHelpers.calculate_mean(samples);
 				
 				Log.d("foo", "got "+Integer.toString(samples.size())+" samples.");
-				/*Log.d("foo", "mean.x: "+Double.toString(mean.x));
-				Log.d("foo", "mean.y: "+Double.toString(mean.y));
-				Log.d("foo", "mean.z: "+Double.toString(mean.z));*/
+
+				
+				Matrix cov = MathHelpers.calculate_covariance(samples, mean);
+				
+				Log.d("foo", "--------------- Covariance:");
+				Log.d("foo", MathHelpers.matrixToString(cov));
+				Log.d("foo", "rank of matrix: "+Integer.toString(cov.rank()));
+				
+				inv_cov =  MathHelpers.pinv(cov);
 				
 				
-				// invert the covariance matrix
-				//double[][] cov = MathHelpers.calculate_covariance(samples, mean);
-				inv_cov =  MathHelpers.pinv(new Matrix(MathHelpers.calculate_covariance(samples, mean)));
 				
-				
-				
-				/*Matrix A = new Matrix(cov);
-				SingularValueDecomposition A_svd = new SingularValueDecomposition(A);
-				
-				Log.d("foo", "--------------- Matrix (array):");
-				Log.d("foo", MathHelpers.matrixToMatlabCode3(cov));
-				
-				Log.d("foo", "--------------- Matrix:");
-				Log.d("foo", MathHelpers.matrixToMatlabCode(A));
-				
-				Log.d("foo", "--------------- Jama SVD: U:");
-				Log.d("foo", MathHelpers.matrixToString(A_svd.getU()));
-				
-				Log.d("foo", "--------------- Jama SVD: S:");
-				Log.d("foo", MathHelpers.matrixToString(A_svd.getS()));
-				
-				Log.d("foo", "--------------- Jama SVD: V:");
-				Log.d("foo", MathHelpers.matrixToString(A_svd.getV()));
-				
-				Log.d("foo", "--------------- Jama SVD: Pseudoinv:");
-				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pseudo_invert3(A)));
-				
-				Log.d("foo", "--------------- Jama SVD: inv:");
-				Log.d("foo", MathHelpers.matrixToString(MathHelpers.pinv(A)));*/
-				
-								
 				// alert the user that the sampling is done and the phone is now locked
 				displayNotification();
 				
@@ -383,14 +453,14 @@ public class AntiTheftService extends Service
 		}
 		else {
 			
-			dist = MathHelpers.mahalanobis3(inv_cov, mean.getColumnVector(), v.getColumnVector());
-			Log.d("foo","Got point. Distance = "+Double.toString(dist));
+			dist = MathHelpers.mahalanobis(inv_cov, mean, v);
+			//Log.d("foo","Got point. Distance = "+Double.toString(dist));
 		}
 		
 		
 		if(graph != null)
 			// copy values for easier access and because ev.values cannot be passed by reference
-			graph.addValue(new Vector3(ev.values[0], ev.values[1], ev.values[2]), dist/threshold);
+			graph.addValue(v, dist/threshold);
 		else
 			Log.w("foo", "no graphview set");
 		
@@ -402,17 +472,17 @@ public class AntiTheftService extends Service
 			///////////////////////////////////////////////////////////////////////
 			
 			if(dist > 0 && dist > threshold) {
-				events.add(new Event(true, ev.timestamp/NS_TO_SECONDS));
+				events.add(new Event(true, timestamp/NS_TO_SECONDS));
 				
 				// immediate alarm fires as soon as an event is over the threshold
 				if(alarm_enabled && alarm_immediately)
 					startAlarm();
 			}
 			else
-				events.add(new Event(false, ev.timestamp/NS_TO_SECONDS));
+				events.add(new Event(false, timestamp/NS_TO_SECONDS));
 			
 			// clean up events which are older
-			while(!events.isEmpty() && events.get(0).timestamp < ev.timestamp/NS_TO_SECONDS-significant_time)
+			while(!events.isEmpty() && events.get(0).timestamp < timestamp/NS_TO_SECONDS-significant_time)
 				events.remove(0);
 			
 			
@@ -427,13 +497,13 @@ public class AntiTheftService extends Service
 						count_f ++;
 				}
 				
-				Log.d("foo", "percentage: "+Float.toString(count_t/(count_t+count_f))+" > "+Double.toString(significant_percent));
-				Log.d("foo", "count: "+Float.toString(count_t+count_f));
+				//Log.d("foo", "percentage: "+Float.toString(count_t/(count_t+count_f))+" > "+Double.toString(significant_percent));
+				//Log.d("foo", "count: "+Float.toString(count_t+count_f));
 				if(count_t/(count_t+count_f) >= significant_percent && mainActivity != null)
 					mainActivity.startCountdown(); // do not immediately alarm the user, instead give him time to disarm it first
 			}
 		} else
-			events.add(new Event(false, ev.timestamp/NS_TO_SECONDS)); // 'zero padding', so that we can calculate a somewhat reasonable percentage
+			events.add(new Event(false, timestamp/NS_TO_SECONDS)); // 'zero padding', so that we can calculate a somewhat reasonable percentage
 														// (otherwise, we would get a very high percentage shortly after finishing sampling,
 														//  because we have almost no events in our window)
 	}

@@ -7,7 +7,7 @@
     <string name="main_subtitle">lock your phone or anthing else lying around</string>
     <string name="main_button_off">click to lock phone</string>
     <string name="main_button_on">locked</string>
-    <string name="main_config_disarmtime">disarming time: 10s</string>
+    <string name="main_config_disarmtime">Immediate Alarm: Enabled, Disarming: Disabled</string>
     <string name="pref_learningtime_title">Learning Time (seconds)</string>
     <string name="title_activity_settings">Advanced Settings</string>
     <string name="pref_actimm">Alert Immediately</string>
@@ -17,7 +17,7 @@
     <string name="pref_showdist">Show Sensor Value</string>
     <string name="pref_showdist_summ">Display the Mahalanobis distance for threshold setting.</string>
     <string name="pref_threshold">Threshold</string>
-    <string name="pref_threshold_summ">Sensorvalues over this limit will activate the alarm.</string>
+    <string name="pref_threshold_summ">Sensorvalues over this limit will activate the alarm. Something around 500 to 1000 should be good.</string>
     <string name="pref_signifpercent">Significant Percentage</string>
     <string name="pref_signifpercent_summ">How many values have to be over the threshold.</string>
     <string name="pref_signifpercent_dialogtext">Percent (0 to 100)</string>
@@ -29,5 +29,12 @@
     <string name="pref_alarm_enabled">Alarm Enabled</string>
     <string name="pref_playloud">Obnoxious Alarm</string>
     <string name="pref_playloud_summ">Play a stubborn alarm sound.</string>
+    <string name="pref_disarm_time">Disarming Time</string>
+    <string name="pref_cat_alarm">Alarm</string>
+    <string name="pref_cat_delayed_alarm">Delayed Alarm (Disarming)</string>
+    <string name="pref_cat_avg_action">Average Sensordata</string>
+    <string name="pref_cat_delayed_alarm_summ">Instead of one value over threshold a certain percent in the last few seconds have to be over threshold.</string>
+    <string name="pref_cat_algorithm">Algorithm</string>
+    <string name="pref_active_sensors">Sensors to monitor</string>
 
 </resources>

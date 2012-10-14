@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
-    <EditTextPreference
-         android:key="pref_learing_time"
-         android:dialogTitle="@string/pref_learningtime_title"
-         android:defaultValue="5" android:title="@string/pref_learningtime" android:summary="@string/pref_learningtime_summ"/>    
-	<CheckBoxPreference
-        android:key="pref_activate_immediately"
-        android:title="@string/pref_actimm"
-        android:summary="@string/pref_actimm_summ"
-        android:defaultValue="false" />
-	<CheckBoxPreference android:defaultValue="false" android:key="pref_show_dist" android:title="@string/pref_showdist" android:summary="@string/pref_showdist_summ"/>
-	<EditTextPreference android:key="pref_threshold" android:dialogTitle="values around 400-800 should be good" android:title="@string/pref_threshold" android:defaultValue="500" android:summary="@string/pref_threshold_summ"/>
-	<EditTextPreference android:key="pref_sig_percent" android:dialogTitle="@string/pref_signifpercent_dialogtext" android:title="@string/pref_signifpercent" android:defaultValue="20" android:summary="@string/pref_signifpercent_summ"/>
-	<ListPreference android:entries="@array/pref_sensorspeed_keys" android:summary="@string/pref_sensorspeed_summ" android:title="@string/pref_sensorspeed" android:key="pref_sensorspeed" android:entryValues="@array/pref_sensorspeed_values" android:dialogTitle="@string/pref_sensorspeed" android:defaultValue="1"/>
-	<EditTextPreference android:key="pref_sig_time" android:title="@string/pref_sigtime" android:defaultValue="5" android:summary="@string/pref_sigtime_summ" android:dialogTitle="@string/pref_sigtime_dialogtitle"/>
-	<CheckBoxPreference android:key="pref_alarm_enabled" android:title="@string/pref_alarm_enabled" android:defaultValue="true"/>
-	<CheckBoxPreference android:key="pref_play_loud_alarm" android:summary="@string/pref_playloud_summ" android:title="@string/pref_playloud" android:defaultValue="true"/>
+    <PreferenceCategory android:title="@string/pref_cat_alarm" android:key="pref_cat_alarm"><CheckBoxPreference android:key="pref_alarm_enabled" android:title="@string/pref_alarm_enabled" android:defaultValue="true" /><CheckBoxPreference android:key="pref_play_loud_alarm" android:summary="@string/pref_playloud_summ" android:title="@string/pref_playloud" android:defaultValue="true" /></PreferenceCategory><PreferenceCategory android:title="@string/pref_cat_delayed_alarm" android:key="pref_cat_delayed_alarm" android:summary="@string/pref_cat_delayed_alarm_summ"><EditTextPreference android:key="pref_disarm_time" android:title="@string/pref_disarm_time" android:dialogTitle="@string/pref_disarm_time"/>
+    
+</PreferenceCategory><PreferenceCategory android:key="pref_cat_algorithm" android:title="@string/pref_cat_algorithm"><EditTextPreference android:key="pref_threshold" android:dialogTitle="@string/pref_threshold" android:title="@string/pref_threshold" android:defaultValue="500" android:summary="@string/pref_threshold_summ" android:dialogMessage="@string/pref_threshold_summ"/><CheckBoxPreference android:defaultValue="false" android:key="pref_show_dist" android:title="@string/pref_showdist" android:summary="@string/pref_showdist_summ" /><EditTextPreference android:key="pref_learing_time" android:dialogTitle="@string/pref_learningtime_title" android:defaultValue="5" android:title="@string/pref_learningtime" android:summary="@string/pref_learningtime_summ" android:dialogMessage="@string/pref_learningtime_summ"/><ListPreference android:entries="@array/pref_sensorspeed_keys" android:summary="@string/pref_sensorspeed_summ" android:title="@string/pref_sensorspeed" android:key="pref_sensorspeed" android:entryValues="@array/pref_sensorspeed_values" android:dialogTitle="@string/pref_sensorspeed" android:defaultValue="1" />
+<ListPreferenceMultiSelect  android:key="pref_active_sensors" android:dialogTitle="@string/pref_active_sensors" android:title="@string/pref_active_sensors" android:selectable="true"/>
+</PreferenceCategory>    
+	<PreferenceCategory android:title="@string/pref_cat_avg_action" android:key="pref_cat_average_activation"><CheckBoxPreference android:key="pref_activate_immediately" android:title="@string/pref_actimm" android:summary="@string/pref_actimm_summ" android:defaultValue="false" /><EditTextPreference android:key="pref_sig_time" android:title="@string/pref_sigtime" android:defaultValue="5" android:summary="@string/pref_sigtime_summ" android:dialogTitle="@string/pref_sigtime_dialogtitle" android:dialogMessage="@string/pref_sigtime_summ"/><EditTextPreference android:key="pref_sig_percent" android:dialogTitle="@string/pref_signifpercent_dialogtext" android:title="@string/pref_signifpercent" android:defaultValue="20" android:summary="@string/pref_signifpercent_summ" android:dialogMessage="@string/pref_signifpercent_summ"/></PreferenceCategory>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 </PreferenceScreen>

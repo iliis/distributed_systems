@@ -3,6 +3,8 @@ package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.preference.ListPreference;
+import android.preference.PreferenceManager;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.view.Menu;
@@ -17,10 +19,11 @@ import android.content.ComponentName;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 
 public class MainActivity extends Activity
-						  implements ToggleButton.OnCheckedChangeListener,
-						  			 OnSeekBarChangeListener {
+						  implements ToggleButton.OnCheckedChangeListener {
 	
 	
 	private AntiTheftService  ATService = null;
@@ -36,8 +39,6 @@ public class MainActivity extends Activity
 			ATService.setGraph(graph);
 			ATService.setMainActivity(MainActivity.this);
 			graph.setATService(ATService);
-			
-			((SeekBar) findViewById(R.id.main_disarm_bar)).setProgress(ATService.getDisarmTime());
 		}
 
 		@Override
@@ -63,12 +64,14 @@ public class MainActivity extends Activity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         
+        MathHelpers.updateMacheps();
+        
         // use this class as a listener for gui events
         ((ToggleButton) findViewById(R.id.enable_alarm))   .setOnCheckedChangeListener(this);
-        ((SeekBar)      findViewById(R.id.main_disarm_bar)).setOnSeekBarChangeListener(this);
         
         // create service which does all the work for us
         bindService(new Intent(this, AntiTheftService.class), ATService_connection, BIND_AUTO_CREATE);
+
     }
     
     @Override
@@ -119,6 +122,13 @@ public class MainActivity extends Activity
 
     
     private void displayStartLearningDialog() {
+    	// only display the dialog once
+    	if(PreferenceManager.getDefaultSharedPreferences(this).getBoolean("start_dialog_displayed", false))
+    		ATService.start();
+    	else
+    		PreferenceManager.getDefaultSharedPreferences(this).edit().putBoolean("start_dialog_displayed", true).commit();
+    	
+    	
     	AlertDialog.Builder b = new AlertDialog.Builder(this);
     	b.setMessage("I will now measure the sensors for some time to learn how it feels just lying around. Please don't move me. "+
     	 "After "+Integer.toString(ATService.getLearnigTime())+" seconds I will be ready and will alert you if anything happens to me!")
@@ -160,27 +170,4 @@ public class MainActivity extends Activity
 	    	disarm_dialog.show();
     	}
     }
-    
-
-	@Override
-	public void onProgressChanged(SeekBar b, int value, boolean u) {
-		// ibration_ms = (long) (progress*((double) (vibration_ms_max-vibration_ms_min)/b.getMax()) + vibration_ms_min);
-		
-		TextView disarm_text = (TextView) findViewById(R.id.main_disarm_text);
-		disarm_text.setText("disarming time: "+Integer.toString(value)+"s");
-		
-		if(ATService != null) ATService.setDisarmTime(value);
-	}
-
-	@Override
-	public void onStartTrackingTouch(SeekBar arg0) {
-		// Auto-generated method stub
-		
-	}
-
-	@Override
-	public void onStopTrackingTouch(SeekBar arg0) {
-		// Auto-generated method stub
-		
-	}
 }

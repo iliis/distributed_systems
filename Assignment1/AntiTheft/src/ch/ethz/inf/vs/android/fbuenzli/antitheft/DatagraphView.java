@@ -3,6 +3,7 @@ package ch.ethz.inf.vs.android.fbuenzli.antitheft;
 import java.util.ArrayList;
 import java.util.List;
 
+import Jama.Matrix;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -17,9 +18,7 @@ import android.view.View;
 public class DatagraphView extends View
 {
 	// points
-	private Paint px = new Paint();
-	private Paint py = new Paint();
-	private Paint pz = new Paint();
+	private Paint[] pvalue = new Paint[10];
 	// distance
 	private Paint pd = new Paint();
 	
@@ -32,10 +31,10 @@ public class DatagraphView extends View
 	private List<DataContainer> data = new ArrayList<DataContainer>();
 	
 	private class DataContainer {
-		public Vector3 v;
+		public Matrix v; // column vector
 		public double  dist;
 		
-		DataContainer(Vector3 vect, double d) {
+		DataContainer(Matrix vect, double d) {
 			v    = vect;
 			dist = d;
 		}
@@ -50,16 +49,21 @@ public class DatagraphView extends View
 		
 		prefMgr = PreferenceManager.getDefaultSharedPreferences(context);
 		
-		px.setColor(Color.rgb(0, 155, 200)); px.setAlpha(100);
-		py.setColor(Color.rgb(0, 100, 255)); py.setAlpha(100);
-		pz.setColor(Color.rgb(0,  55, 255)); pz.setAlpha(100);
+		for(int i=0; i<10; i++) {
+			pvalue[i] = new Paint();
+			
+			pvalue[i].setColor(Color.rgb(0, (255-i*51) % 255, (int) (i*25.5)));
+			pvalue[i].setAlpha(100);
+			pvalue[i].setStrokeWidth(2);
+		}
+		
+		
+		
 		pd.setColor(Color.RED);
 		pt.setColor(Color.BLACK);
 		pl.setColor(Color.BLACK);
 		
-		px.setStrokeWidth(2);
-		py.setStrokeWidth(2);
-		pz.setStrokeWidth(2);
+		
 		pd.setStrokeWidth(3);
 		
 		pt.setStrokeWidth(1);
@@ -120,9 +124,8 @@ public class DatagraphView extends View
 			int i = 0;
 			for(DataContainer d: data)
 			{
-				c.drawPoint(i*2, (float) (m-d.v.x/max*m/10), px);
-				c.drawPoint(i*2, (float) (m-d.v.y/max*m/10), py);
-				c.drawPoint(i*2, (float) (m-d.v.z/max*m/10), pz);
+				for(int k=0; k<d.v.getRowDimension(); k++)
+					c.drawPoint(i*2, (float) (m-d.v.get(k, 0)/max*m/10), pvalue[k]);
 				
 				if(d.dist >= 0)
 				{
@@ -145,7 +148,7 @@ public class DatagraphView extends View
 		
 	}
 	
-	public void addValue(Vector3 v, double dist)
+	public void addValue(Matrix v, double dist)
 	{
 		data.add(new DataContainer(v, dist));
 		
